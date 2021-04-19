@@ -10,41 +10,37 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <ctype.h>
-#include <errno.h>
+
+#define NUM_CHILD_PROCS 26
 
 void printResults(int * results) {
 
     int totalChars = 0;
-    for (int i = 0; i < 27; i++) {
+    for (int i = 0; i < NUM_CHILD_PROCS; i++) {
         totalChars += results[i];
     }
 
-    float aZChars = ((totalChars - results[26]) / (float)totalChars) * 100;
-    float nonAZChars = (results[26] / (float)totalChars) * 100;
-    printf("[ -------------------------------------------------- ]\n");
-    printf("Total number of characters is: %d\n", totalChars);
-    printf("The number of Aa-Zz characters is: %d\t frequency: (%.2f %%)\n", totalChars - results[26], aZChars);
-    printf("The number of non Aa-Zz characters: %d\t frequency: (%.2f %%)\n", results[26], nonAZChars);
-    printf("------------------------------------------------------\n");
+    printf("\n[ ------------------------------------------------------- ]\n");
+    printf("Total number of Aa-Zz characters is: %d\n", totalChars);
+    printf("-----------------------------------------------------------\n");
 
     // printing values of all Aa-Zz characters
-    for (int i = 0; i < 27; i++) {
-        if (i != 26) {
-            char upperCase = (char) i + 65;
-            char lowerCase = (char) i + 97;
-            float frequency = (results[i] / (float)(totalChars - results[26])) * 100;
-            printf("The number of (%c's or %c's) is: %d\t frequency: (%.2f %%)\n", lowerCase, upperCase, results[i], frequency);  
-        }  
+    for (int i = 0; i < NUM_CHILD_PROCS; i++) {
+        char upperCase = (char) i + 65;
+        char lowerCase = (char) i + 97;
+        float frequency = (results[i] / (float)totalChars) * 100;
+        printf("The number of (%c's or %c's) is: %d\t frequency: (%.2f %%)\n", lowerCase, upperCase, results[i], frequency);  
     }
+
+    printf("[ ------------------------------------------------------- ]\n");
 }
 
 int *checkFrequencies(char *fname) {
 
-    pid_t pids[27];
-    int numChildProcs = 26;
-    int *shared_memory = mmap(NULL, sizeof(int) * 27, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+    pid_t pids[NUM_CHILD_PROCS];
+    int *shared_memory = mmap(NULL, sizeof(int) * NUM_CHILD_PROCS, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0);
 
-    for (int i = 0; i < numChildProcs; i++) {
+    for (int i = 0; i < NUM_CHILD_PROCS; i++) {
         
         pids[i] = fork();
 
@@ -79,6 +75,8 @@ int *checkFrequencies(char *fname) {
         }
     }
 
+    int numChildProcs = NUM_CHILD_PROCS;
+
     //  The main process waits for all children processes to finish
     int status;
     pid_t pid;
@@ -87,24 +85,6 @@ int *checkFrequencies(char *fname) {
         --numChildProcs;
     }
 
-    // The main process counts all non Aa-Zz characters before exiting 
-    FILE *file = fopen(fname, "r");
-    if (file == NULL) {
-        printf("An error occured trying to open the file with pid: %d\n", getpid());
-        exit(1);
-    }
-
-    char c;
-    while ((c = fgetc(file)) != EOF) {
-        if (c < 0 || c > 127) {
-            shared_memory[26]++;
-        }
-        else if (!islower(c) || !isupper(c)) {
-            shared_memory[26]++;
-        }
-    }
-
-    fclose(file);
     return shared_memory;
 }
 
@@ -121,8 +101,6 @@ int main(int argc, char* argv[]) {
     }
 
     else {
-        printf("Filename given: %s\n", argv[1]);
-
         FILE *file;
         file = fopen(argv[1], "r");
 
@@ -132,7 +110,7 @@ int main(int argc, char* argv[]) {
             printResults(numChars);
 
             // Frees mmap shared memory that was allocated
-            int error = munmap(numChars, sizeof(int) * 27);
+            int error = munmap(numChars, sizeof(int) * NUM_CHILD_PROCS);
             if (error != 0) {
                 printf("An error occured with unmapping shared memory\n");
                 exitCode = 1;
@@ -146,5 +124,6 @@ int main(int argc, char* argv[]) {
         }
     }
 
+    printf("program exited with code %d\n", exitCode);
     return exitCode;
 }
